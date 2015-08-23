@@ -209,3 +209,186 @@ The following code illustrates the web.xmlfile:
 </web-app>
 ```
 
+##CXF architecture
+
+The architecture of CXF is built upon the following components:
+*	 Bus
+*	 Frontend 
+*	 Messaging and Interceptors
+*	 Service Model
+*	 Data bindings
+*	 Protocol bindings
+*	 Transport
+
+![](http://snag.gy/64QQq.jpg)
+
+Bus
+is the backbone of the CXF architecture. The CXF bus is comprised of a Spring-based configuration file, namely, cxf.xmlwhich is loaded upon servlet initialization through SpringBusFactory. It defines a common context for all the endpoints. It wires all the runtime infrastructure components and provides a common application context. The SpringBusFactoryscans and loads the relevant configuration files in the META-INF/cxf directory placed in the classpath and accordingly builds the application context. It builds the application context from the following files:
+
+*	 META-INF/cxf/cxf.xml
+*	 META-INF/cxf/cxf-extension.xml
+*	 META-INF/cxf/cxf-property-editors.xml
+
+The following XML fragment shows the bus definition in the cxf.xml file.
+
+<bean id="cxf" class="org.apache.cxf.bus.CXFBusImpl" />
+
+The core bus component is CXFBusImpl. The class acts more as an interceptor  provider for incoming and outgoing requests to a web service endpoint. 
+The cxf.xmlfile also defines other infrastructure components such as BindingFactoryManager, ConduitFactoryManager, and so on. These components are made available as bus extensions. One can access these infrastructure objects using the getExtensionmethod. These infrastructure components are registered so as to get and update various service endpoint level parameters such as service binding, transport protocol, conduits, and so on.
+
+CXF bus architecture can be overridden, but one must apply caution when overriding the default bus behavior. Since the bus is the core component that loads the CXF runtime, many shared objects are also loaded as part of this runtime. You want to make sure that these objects are loaded when overriding the existing bus implementation.
+
+You can extend the default bus to include your own custom components or service objects such as factory managers. You can also add interceptors to the bus bean. 
+
+These interceptors defined at the bus level are available to all the endpoints. The following code shows how to create a custom bus:
+
+SpringBeanFactory.createBus("mycxf.xml")
+
+The following code illustrates the use of interceptors at the bus level:
+```xml
+<bean id="cxf" class="org.apache.cxf.bus.spring.SpringBusImpl">
+    <property name="outInterceptors">
+           <list>
+              <ref bean="myLoggingInterceptor"/>
+           </list>
+        </property>
+</bean>
+<bean id="myLogHandler" class="org.mycompany.com.cxf.logging.
+                               LoggingInterceptor">
+    ...
+</bean>
+```
+###Frontend
+
+CXF provides the concept of frontend modeling, which lets you create web services using different frontend APIs. The APIs let you create a web service using simple factory beans and JAX-WS implementation. It also lets you create dynamic web 
+service clients. The primary frontend supported by CXF is JAX-WS. 
+
+###JAX-WS
+
+is a specification that establishes the semantics to develop, publish, and consume web services. JAX-WS simplifies web service development. It defines Java-based APIs that ease the development and deployment of web services. 
+
+The specification supports WS-Basic Profile 1.1 that addresses web service interoperability. It effectively means a web service can be invoked or consumed by a client written in any language. JAX-WS also defines standards such as JAXBand 
+SAAJ. CXF provides support for complete JAX-WS stack.
+
+JAXB provides data binding capabilities by providing a convenient way to map XML schema to a representation in Java code. The JAXB shields the conversion of XML schema messages in SOAP messages to Java code without the developers seeing XML and SOAP parsing. JAXB specification defines the binding between Java and XML Schema. SAAJprovides a standard way of dealing with XML attachments contained in a SOAP message.
+
+JAX-WS also speeds up web service development by providing a library of annotations to turn Plain Old Java classes into web services and specifies a detailed mapping from a service defined in WSDL to the Java classes that will implement that 
+service. Any complex types defined in WSDL are mapped into Java classes following the mapping defined by the JAXB specification.
+
+As discussed earlier, two approaches for web service development exist: Code-First and Contract-First. With JAX-WS, you can perform web service development using one of the said approaches, depending on the nature of the application.
+
+With the Code-first approach, you start by developing a Java class and interface and annotating the same as a web service. The approach is particularly useful where Java implementations are already available and you need to expose implementations 
+as services.
+
+You typically create a Service Endpoint Interface (SEI) that defines the service methods and the implementation class that implements the SEI methods. The consumer of a web service uses SEI to invoke the service functions. The SEI directly 
+corresponds to a wsdl:portTypeelement. The methods defined by SEI correspond to the wsdl:operation element. 
+```java
+@WebService
+public interface OrderProcess {
+    String processOrder(Order order);
+}
+```
+
+JAX-WS makes use of annotations to convert an SEI or a Java class to a web service. In the above example, the @WebServiceannotation defined above the interface declaration signifies an interface as a web service interface or Service 
+Endpoint Interface.
+
+In the Contract-first approach, you start with the existing WSDL contract, and generate Java class to implement the service. The advantage is that you are sure about what to expose as a service since you define the appropriate WSDL Contract-first. Again the contract definitions can be made consistent with respect to data types so that it can be easily converted in Java objects without any portability issue.
+
+WSDL contains different elements that can be directly mapped to a Java class that implements the service. For example, the wsdl:portTypeelement is directly mapped to SEI, type elements are mapped to Java class types through the use of Java 
+Architecture of XML Binding (JAXB), and the wsdl:serviceelement is mapped to a Java class that is used by a consumer to access the web service.
+
+The WSDL2Javatool can be used to generate a web service from WSDL. It has various options to generate SEI and the implementation web service class. As a developer, you need to provide the method implementation for the generated class. If the WSDL includes custom XML Schema types, then the same is converted into its equivalent Java class.
+
+###Simple frontend
+
+ The 
+simple frontend uses factory components to create a service and the client. It does so by using Java reflection API. 
+
+The following code shows a web service created using simple frontend:
+
+```java
+// Build and publish the service
+OrderProcessImpl orderProcessImpl = new OrderProcessImpl();
+ServerFactoryBean svrFactory = new ServerFactoryBean();
+svrFactory.setServiceClass(OrderProcess.class);
+svrFactory.setAddress("http://localhost:8080/OrderProcess");
+svrFactory.setServiceBean(orderProcessImpl);
+svrFactory.create();
+```
+
+###Messaging and Interceptors
+
+One of the important elements of CXF architecture is the Interceptor components. Interceptors are components that intercept the messages exchanged or passed between web service clients and server components. In CXF, this is implemented 
+through the concept of Interceptor chains. The concept of Interceptor chaining is the core functionality of CXF runtime. 
+
+Each interceptor in a chain is configurable, and the user has the ability to control its execution.
+
+![](http://snag.gy/KfJCZ.jpg)
+
+The core of the framework is the Interceptor interface. It defines two abstract methods—handleMessageand handleFault. Each of the methods takes the object of type Messageas a parameter.
+
+The handleFaultmethod is implemented to handle the error condition. Interceptors are usually processed in chains with every 
+interceptor in the chain performing some processing on the message in sequence, and the chain moves forward. Whenever an error condition arises, a handleFault method is invoked on each interceptor, and the chain unwinds or moves backwards.
+Interceptors are often organized or grouped into phases. Interceptors providing common functionality can be grouped into one phase. Each phase performs specific message processing. Each phase is then added to the interceptor chain. The chain, 
+therefore, is a list of ordered interceptor phases. The chain can be created for both inbound and outbound messages. A typical web service endpoint will have three interceptor chains:
+
+*	 Inbound messages chain
+*	 Outbound messages chain
+*	 Error messages chain
+
+There are built-in interceptors such as logging, security, and so on, and the developers can also choose to create custom interceptors.
+
+###Service model
+
+The Service model, in a true sense, models your service. It is a framework of components that represents a service in a WSDL-like model. It provides functionality to create various WSDL elements such as operations, bindings, endpoints, 
+schema, and so on. The following figure shows the various components that form the Service model:
+
+![](http://snag.gy/lTRTM.jpg)
+
+The service model's primary component is ServiceInfowhich aggregates other related components that make up the complete service model. ServiceInfois comprised of the following components that more or less represent WSDL elements:
+ 
+*	 InterfaceInfo
+*	 OperationInfo
+*	 MessageInfo
+*	 BindingInfo
+*	 EndpointInfo
+
+A web service is usually created using one of the frontends offered by CXF. It can be either constructed from a Java class or from a WSDL. CXF frontends internally use the service model to create web services. For example, by using a simple frontend, we can create, publish, and consume web services through factory components such as ServerFactoryBeanand  ClientProxyFactoryBean. These factory classes internally use the service model of CXF.
+
+###Data binding
+
+Data binding components perform mapping between Java objects and XML elements, this mapping for you. CXF supports two types of data binding components—JAXBand Aegis. CXF uses JAXB as the default data binding component. As a developer, you have the choice of specifying the binding discipline through a configuration file or API. If no binding is specified, then JAXB is taken as a default binding discipline. The latest version of CXF uses JAXB 2.1. JAXB uses annotations to define the mapping between Java objects and XML.
+
+CXF also supports the Aegis data binding component to map between Java objects and XML. Aegis allows developers to gain control of data binding through its flexible mapping system. You do not have to rely on annotations to devise the mapping. Your Java code is clean and simple POJO. 
+
+Aegis also supports some annotations that can be used to devise binding. Some of the annotations that can be used with Aegis are:
+
+•	 XmlAttribute
+•	 XmlElement
+•	 XmlParamType
+•	 XmlReturnType
+•	 XmlType
+
+In Aegis, you define the data mapping in a file called <MyJavaObject>.aegis.xml, where MyJavaObjectis the object that you are trying to map with XML. Aegis reads this XML to perform the necessary binding. Aegis also uses reflection to derive the 
+mapping between Java object and XML. The following code fragment shows the sample Aegis mapping file: 
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<mappings>
+    <mapping name="HelloWorld">
+        <method name="sayHi">
+            <parameter index="0" mappedName="greeting" nillable='false' />
+        </method>
+    </mapping>
+</mappings>
+```
+
+The above XML fragment states that a string parameter of a method named sayHi of the bean HelloWorldshould be mapped to a name as greeting. You can configure your web service to use Aegis data binding as follows:
+
+```xml
+<jaxws:endpoint id="orderProcess" implementor="demo.order.OrderProcessImpl" address="/OrderProcess" >
+   <jaxws:dataBinding>
+    <bean class="org.apache.cxf.aegis.databinding.AegisDatabinding" />
+   </jaxws:dataBinding>
+</jaxws:endpoint>
+```
